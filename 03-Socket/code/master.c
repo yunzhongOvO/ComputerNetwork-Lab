@@ -32,10 +32,10 @@ int main(int argc, char *argv[])
 
         // connect to workers
         if (connect(sock[i], (struct sockaddr *)&workers[i], sizeof(workers[i])) < 0) {
-            printf("connect failed\n");
+            printf(" connect failed\n");
             return 1;
         }        
-        printf("connected\n");
+        printf(" connected\n");
     }    
 
     //read txt file
@@ -55,7 +55,7 @@ int main(int argc, char *argv[])
 
     // initialize
     send_msg msg;
-    int workers_reply[2][26] = {0};
+    int workers_reply[WORKER_NUM][26] = {0};
     int reply[26];
     int j;
 

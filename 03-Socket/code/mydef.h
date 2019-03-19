@@ -5,7 +5,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 
-#define WORKER_NUM 2
+#define WORKER_NUM 3
 
 typedef struct message
 {

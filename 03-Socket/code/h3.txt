@@ -1,0 +1,5 @@
+socket created
+bind done
+waiting for incoming connections...
+connection accepted
+client disconnected

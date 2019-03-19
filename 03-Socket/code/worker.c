@@ -2,21 +2,39 @@
 
 #include "mydef.h"
 
-void Atoa(char * s, int t[])
+void record(char * s, int t[])
 {
     int i, j;
-    for(i = 0; i < strlen(s); i ++){
-        if(s[i] >= 'A' && s[i] <= 'Z') {
+    // convert uppercase to lowercase
+    for(i = 0; i < strlen(s); i ++)
+        s[i] = (s[i] >= 'A' && s[i] <= 'Z') ? s[i] - 'A' + 'a' : s[i];
+    
+    // record numbers of 26 letters
+    for(i = 0; i < strlen(s); i ++)
+    {
+        if(s[i] >= 'a' && s[i] <= 'z') 
+        {
             j = s[i] - 'a';
-            t[j] ++;
+            ++ t[j];
         }
-        else if(s[i] >= 'a' && s[i] <= 'z') {
-            j = s[i] - 'a';
-            t[j] ++;
-        }
+
+        // j = (s[i] >= 'a' && s[i] <= 'z') ? s[i] - 'a' : -1;
+        // if (j == -1)
+        //     ++ t[j];
     }
     return;
 }
+
+// void Atoa(char* message,int stat[]){
+//     int key;
+//     low(message);
+//     for(int i=0; i<strlen(message) ;++i){
+//         key = (message[i]>='a' && message[i]<='z')? message[i]-'a' : -1;
+//         if(key != -1)
+//             ++stat[key];
+//     }
+//     return;
+// }
 
 int main(int argc, const char *argv[])
 {
@@ -70,7 +88,7 @@ int main(int argc, const char *argv[])
 
         for(i = msg.start; i < msg.end; i ++){
             fgets(buffer, sizeof(buffer), fp);
-            Atoa(buffer, reply);
+            record(buffer, reply);
         }
 
         write(cs, (char *)reply, sizeof(reply));
