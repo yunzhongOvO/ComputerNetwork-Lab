@@ -35,4 +35,11 @@ void broadcast_packet(iface_info_t *iface, char *packet, int len)
 {
 	// TODO: implement the broadcast process here
 	fprintf(stdout, "TODO: implement the broadcast process here.\n");
+	iface_info_t *ifaces = NULL;
+	struct list_head *list = &instance->iface_list;
+	list_for_each_entry(ifaces, list, list) {
+		if(ifaces != iface) {
+			iface_send_packet(ifaces, packet, len);
+		}
+	}
 }

@@ -38,9 +38,9 @@ iface_info_t *lookup_port(u8 mac[ETH_ALEN])
 {
 	// TODO: implement the lookup process here
 	fprintf(stdout, "implement the lookup process here.\n");
-	mac_port_entry_t * entry;
-	u8 hash_val = hash8(mac, ETH_ALEN)];
-	iface_info_t * result;
+	mac_port_entry_t * entry = NULL;
+	u8 hash_val = hash8((char *)mac, sizeof(u8) * ETH_ALEN);
+	iface_info_t * result = NULL;
 
 	pthread_mutex_lock(&mac_port_map.lock);
 	list_for_each_entry(entry, &mac_port_map.hash_table[hash_val], list) {
@@ -63,9 +63,9 @@ void insert_mac_port(u8 mac[ETH_ALEN], iface_info_t *iface)
 	// initialize a new entry
 	mac_port_entry_t * entry = (mac_port_entry_t *)malloc(sizeof(mac_port_entry_t));
 	entry->iface = iface;
-	entry->mac = mac;
 	entry->visited = time(NULL);
-	u8 hash_val = hash8(mac, ETH_ALEN);
+	memcpy(entry->mac, mac, sizeof(u8) * ETH_ALEN);
+	u8 hash_val = hash8((char *)mac, sizeof(u8) * ETH_ALEN);
 
 	pthread_mutex_lock(&mac_port_map.lock);
 	// add entry into list
@@ -99,23 +99,20 @@ int sweep_aged_mac_port_entry()
 	fprintf(stdout, "implement the sweeping process here.\n");
 	mac_port_entry_t *entry, *q;
 	time_t now = time(NULL);
-	
-	while (1) {
-		pthread_mutex_lock(&mac_port_map.lock);
-		for (int i = 0; i < HASH_8BITS; i++) {
-			list_for_each_entry_safe(entry, q, &mac_port_map.hash_table[i], list) {
-				if (now - entry->visited >= MAC_PORT_TIMEOUT) {
-					// delete the entry
-					list_delete_entry(&entry->list);
-					free(entry);
-				}
+	int count = 0;
+	pthread_mutex_lock(&mac_port_map.lock);
+	for (int i = 0; i < HASH_8BITS; i++) {
+		list_for_each_entry_safe(entry, q, &mac_port_map.hash_table[i], list) {
+			if (now - entry->visited >= MAC_PORT_TIMEOUT) {
+				// delete the entry
+				list_delete_entry(&entry->list);
+				free(entry);
+				count ++;
 			}
 		}
-		// cycling every 1 second
-		sleep(TIME_SLICE);
-		pthread_mutex_unlock(&mac_port_map.lock);
-	}	
-	return 0;
+	}
+	pthread_mutex_unlock(&mac_port_map.lock);
+	return count;
 }
 
 // sweeping mac_port table periodically, by calling sweep_aged_mac_port_entry
