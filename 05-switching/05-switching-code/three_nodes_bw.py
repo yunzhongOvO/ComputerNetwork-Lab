@@ -27,9 +27,9 @@ if __name__ == '__main__':
     net = Mininet(topo = topo, link = TCLink, controller = None) 
 
     h1, h2, h3, s1 = net.get('h1', 'h2', 'h3', 's1')
-    h1.cmd('ifconfig h1-eth0 10.0.0.4/8')
-    h2.cmd('ifconfig h2-eth0 10.0.0.5/8')
-    h3.cmd('ifconfig h3-eth0 10.0.0.6/8')
+    h1.cmd('ifconfig h1-eth0 10.0.0.1/8')
+    h2.cmd('ifconfig h2-eth0 10.0.0.2/8')
+    h3.cmd('ifconfig h3-eth0 10.0.0.3/8')
     clearIP(s1)
 
     for h in net.get('h1', 'h2', 'h3'):
@@ -39,8 +39,8 @@ if __name__ == '__main__':
         h.cmd('./disable_ipv6.sh')
 
     net.start()
-    s1.cmd('./switch-reference &')
-    h2.cmd('iperf -s &')
-    h3.cmd('iperf -s &')
+    # s1.cmd('./switch-reference &')
+    # h2.cmd('iperf -s &')
+    # h3.cmd('iperf -s &')
     CLI(net)
     net.stop()

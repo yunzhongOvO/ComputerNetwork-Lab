@@ -39,12 +39,12 @@ iface_info_t *lookup_port(u8 mac[ETH_ALEN])
 	// TODO: implement the lookup process here
 	fprintf(stdout, "implement the lookup process here.\n");
 	mac_port_entry_t * entry = NULL;
-	u8 hash_val = hash8((char *)mac, sizeof(u8) * ETH_ALEN);
+	//u8 hash_val = ;
 	iface_info_t * result = NULL;
 
 	pthread_mutex_lock(&mac_port_map.lock);
-	list_for_each_entry(entry, &mac_port_map.hash_table[hash_val], list) {
-		if (memcmp(entry->mac, mac, ETH_ALEN * sizeof(u8))) {
+	list_for_each_entry(entry, &mac_port_map.hash_table[hash8((char *)mac, sizeof(u8) * ETH_ALEN)], list) {
+		if (!memcmp(entry->mac, mac, ETH_ALEN * sizeof(u8))) {
 			// if found, get its iface info and the time
 			entry->visited = time(NULL);
 			result = entry->iface;
@@ -107,7 +107,7 @@ int sweep_aged_mac_port_entry()
 				// delete the entry
 				list_delete_entry(&entry->list);
 				free(entry);
-				count ++;
+				++ count;
 			}
 		}
 	}

@@ -44,12 +44,12 @@ void handle_packet(iface_info_t *iface, char *packet, int len)
 	fprintf(stdout, "TODO: implement the packet forwarding process here.\n");
 	iface_info_t * result = lookup_port(eh->ether_dhost);
 	
-	if (result != NULL) 
+	if (result) 
 		iface_send_packet(result, packet, len);
 	else
 		broadcast_packet(iface, packet, len);
 	
-	if (lookup_port(eh->ether_shost) != NULL)
+	if (!lookup_port(eh->ether_shost))
 		insert_mac_port(eh->ether_shost, iface);
 }
 
