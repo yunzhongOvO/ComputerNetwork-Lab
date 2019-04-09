@@ -10,21 +10,21 @@ def clearIP(n):
 
 class RingTopo(Topo):
     def build(self):
-        b1 = self.addHost('b1')
-        b2 = self.addHost('b2')
-        b3 = self.addHost('b3')
-        b4 = self.addHost('b4')
+        b = [0] * 8
+        for i in range(1, 8):
+            b[i] = self.addHost('b%d'%i)
 
-        self.addLink(b1, b2)
-        self.addLink(b1, b3)
-        self.addLink(b2, b4)
-        self.addLink(b3, b4)
+        edge = [ (1,2), (2,3), (3,4), (4,5), (5,6), (6,7),\
+                 (7,1), (1,4), (1,5), (2,7), (2,5), (4,7) ]
+        
+        for (i,j) in edge:
+            self.addLink(b[i], b[j])
 
 if __name__ == '__main__':
     topo = RingTopo()
     net = Mininet(topo = topo, controller = None) 
-    
-    nports = [2]*4
+
+    nports = [4, 4, 2, 4, 4, 2, 4]
 
     for idx in range(len(nports)):
         name = 'b' + str(idx+1)
@@ -40,7 +40,7 @@ if __name__ == '__main__':
 
             node.setMAC(mac, intf = intf)
 
-        node.cmd('./stp-reference > %s-output.txt 2>&1 &' % name)
+        node.cmd('./stp > %s-output.txt 2>&1 &' % name)
 
     net.start()
     CLI(net)

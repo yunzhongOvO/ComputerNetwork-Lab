@@ -139,37 +139,40 @@ void *stp_timer_routine(void *arg)
 	return NULL;
 }
 
-int cmp_config_priority(stp_port_t *p,	struct stp_config *config)
-{
-	// if config's priority > p's, return TRUE
-	if (ntohll(config->root_id) != p->designated_root)	
-		return (ntohll(config->root_id) < p->designated_root) ? 1 : 0;
-	else if (ntohl(config->root_path_cost) != p->designated_cost)
-		return (ntohl(config->root_path_cost) < p->designated_cost) ? 1 : 0;
-	else if (ntohll(config->switch_id) != p->designated_switch)
-		return (ntohll(config->switch_id) < p->designated_switch) ? 1 : 0;
-	else if (ntohs(config->port_id) != p->designated_port)
-		return (ntohs(config->port_id) < p->designated_port) ? 1 : 0;
-}
+int cmp_config_priority(stp_port_t *p, struct stp_config *config)
+    {
+        // if config's priority > p's, return TRUE
+        if (ntohll(config->root_id) != p->designated_root)	
+            return (ntohll(config->root_id) < p->designated_root) ? 1 : 0;
+        else if (ntohl(config->root_path_cost) != p->designated_cost)
+            return (ntohl(config->root_path_cost) < p->designated_cost) ? 1 : 0;
+        else if (ntohll(config->switch_id) != p->designated_switch)
+            return (ntohll(config->switch_id) < p->designated_switch) ? 1 : 0;
+        else if (ntohs(config->port_id) != p->designated_port)
+            return (ntohs(config->port_id) < p->designated_port) ? 1 : 0;
+		else
+        	return 0;
+    }
 
-int cmp_port_port(stp_port_t * p1, stp_port_t * p2)
+int cmp_port_priority(stp_port_t * p1, stp_port_t * p2)
 {
 	if (p1->designated_root != p2->designated_root)	
 		return (p1->designated_root < p2->designated_root) ? 1 : 0;
-	else if (p1->designated_cost != p2->designated_cost)
+	else if (p1->designated_cost != p2->designated_cost) 
 		return (p1->designated_cost < p2->designated_cost) ? 1 : 0;
-	else if (p1->designated_switch != p2->designated_switch)
+	else if (p1->designated_switch != p2->designated_switch) 
 		return (p1->designated_switch < p2->designated_switch) ? 1 : 0;
-	else if (p1->designated_port != p2->designated_port)
+	else if (p1->designated_port != p2->designated_port) 
 		return (p1->designated_port < p2->designated_port) ? 1 : 0;
+	else 
+		return 0;
 }
 
 static void stp_handle_config_packet(stp_t *stp, stp_port_t *p, struct stp_config *config)
 {
 	// TODO: handle config packet here
-	fprintf(stdout, "TODO: handle config packet here.\n");
+	// fprintf(stdout, "TODO: handle config packet here.\n");
 	
-	int is_root = stp_is_root_switch(stp);
 	// compare priority of configs
 	if (cmp_config_priority(p, config)) {
 		// replace config
@@ -181,8 +184,11 @@ static void stp_handle_config_packet(stp_t *stp, stp_port_t *p, struct stp_confi
 		// update stp state
 		stp->root_port = NULL;
 		for (int i = 0; i < stp->nports; i ++) {
-			if (!stp_port_is_designated(&stp->ports[i]) && cmp_port_port(&stp->ports[i], stp->root_port))
-				stp->root_port = &stp->ports[i];
+			if (stp_port_is_designated(&stp->ports[i]))  
+				continue;				
+			if ( stp->root_port == NULL || (stp->root_port != NULL \
+			     && cmp_port_priority(&stp->ports[i], stp->root_port) > 0))
+				stp->root_port = &stp->ports[i];			
 		}
 		if (stp->root_port == NULL) {
 			// cannot find desire root port
@@ -197,6 +203,7 @@ static void stp_handle_config_packet(stp_t *stp, stp_port_t *p, struct stp_confi
 		stp_port_t * port_i;
 		for (int i = 0; i < stp->nports; i ++) {
 			port_i = &stp->ports[i];	
+			if (port_i == p) continue;
 			if (stp_port_is_designated(port_i)) {
 				port_i->designated_root = stp->designated_root;
 				port_i->designated_cost = stp->root_path_cost;
@@ -207,10 +214,10 @@ static void stp_handle_config_packet(stp_t *stp, stp_port_t *p, struct stp_confi
 				}
 			}			
 		}
-
-		if (is_root) // used to be root
-			stp_stop_timer(&stp->hello_timer);
+		// stop hello timer
+		stp_stop_timer(&stp->hello_timer);
 		
+		// send new config from designated port
 		stp_send_config(stp);
 
 	} else {
