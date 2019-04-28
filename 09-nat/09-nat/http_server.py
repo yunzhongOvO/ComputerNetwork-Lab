@@ -1,0 +1,42 @@
+import os
+import sys
+import BaseHTTPServer
+
+INDEX_PAGE_FMT = '''
+<!doctype html> 
+<html>
+	<head> <meta charset="utf-8">
+		<title>Network IP Address</title>
+	</head>
+	<body> 
+            My network IP is: my_ip_here 
+            Remote IP is: your_ip_here
+        </body>
+</html>
+'''
+
+def my_ip():
+    f = os.popen("ifconfig | grep '\<inet\>' | sed 's/^[ \t]*//' | grep -v 'inet 127.' | awk '{print $2}'")
+    return f.read()
+
+class SimpleHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
+    def do_GET(self):
+        local_ip = my_ip()
+        remote_ip = self.client_address[0]
+
+        page = INDEX_PAGE_FMT.replace('my_ip_here', local_ip).replace('your_ip_here', remote_ip)
+
+        self.send_response(200)
+        encoding = sys.getfilesystemencoding()
+        self.send_header("Content-type", "text/html; charset=%s" % encoding)
+        self.send_header("Content-Length", str(len(page)))
+        self.end_headers()
+
+        self.wfile.write(page)
+
+def test(HandlerClass = SimpleHTTPRequestHandler,
+         ServerClass = BaseHTTPServer.HTTPServer):
+    BaseHTTPServer.test(HandlerClass, ServerClass)
+
+if __name__ == '__main__':
+    test()
