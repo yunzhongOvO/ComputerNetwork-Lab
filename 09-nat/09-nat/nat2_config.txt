@@ -1,0 +1,3 @@
+internal-iface: n2-eth1
+external-iface: n2-eth0
+dnat-rules: 159.226.39.44:8000 -> 10.21.0.2:8000

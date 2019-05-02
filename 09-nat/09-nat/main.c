@@ -258,10 +258,10 @@ int main(int argc, const char **argv)
 		exit(1);
 	}
 
-	// if (argc < 2) {
-	// 	log(ERROR, "config file is required.");
-	// 	exit(1);
-	// }
+	if (argc < 2) {
+		log(ERROR, "config file is required.");
+		exit(1);
+	}
 
 	init_ustack(argv[1]);
 
