@@ -36,21 +36,21 @@
 
 - r1-eth1的队列长度
 
-  ![](12-bufferbloat\12-bufferbloat\pic\packet.jpg)
+  ![](12-bufferbloat/pic/packet.jpg)
 
 - h1与h2间的往返延迟
 
-  ![](E:\Git\ComputerNetwork-Lab\12-bufferbloat\12-bufferbloat\pic\rtt.jpg)
+  ![](12-bufferbloat/pic/rtt.jpg)
 
 #### 解决BufferBloat问题--带宽对ping延迟的影响
 
 - 使用三种算法解决BufferBloat问题，ping延迟如下
 
-  ![](12-bufferbloat\12-bufferbloat\pic\algo.jpg)
+  ![](12-bufferbloat/pic/algo.jpg)
 
 - 局部放大，重现带宽对ping延迟的影响
 
-  ![](E:\Git\ComputerNetwork-Lab\12-bufferbloat\12-bufferbloat\pic\2-2.png)
+  ![](12-bufferbloat/pic/2-2.png)
 
 ## 结果分析
 
