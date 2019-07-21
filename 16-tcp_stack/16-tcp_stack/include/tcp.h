@@ -52,12 +52,12 @@ struct tcp_cb {
 	u32 seq;		// sequence number in tcp header
 	u32 seq_end;		// seq + (SYN|FIN) + len(payload)
 	u32 ack;		// ack number in tcp header
+	char *payload;		// pointer to tcp data
+	int pl_len;		// the length of tcp data
 	u32 rwnd;		// receiving window in tcp header
 	u8 flags;		// flags in tcp header
 	struct iphdr *ip;		// pointer to ip header
 	struct tcphdr *tcp;		// pointer to tcp header
-	char *payload;		// pointer to tcp data
-	int pl_len;		// the length of tcp data
 };
 
 // tcp states

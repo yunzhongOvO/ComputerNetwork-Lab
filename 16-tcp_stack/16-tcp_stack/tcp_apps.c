@@ -2,8 +2,9 @@
 
 #include "log.h"
 
-#include <stdlib.h>
 #include <unistd.h>
+#include<stdio.h>
+#define MAX_BUF 4*1024*1024 // 4MB
 
 // tcp server application, listens to port (specified by arg) and serves only one
 // connection request
@@ -31,28 +32,28 @@ void *tcp_server(void *arg)
 
 	log(DEBUG, "accept a connection.");
 
-	char rbuf[1001];
-	char wbuf[1024];
+	FILE *f = fopen("./server-output.dat","w+");
+	char* rbuf = (char*)malloc(MAX_BUF);
 	int rlen = 0;
-	while (1) {
-		rlen = tcp_sock_read(csk, rbuf, 1000);
+	int total_recv = 0;
+	while(1){
+		memset(rbuf, 0, MAX_BUF);
+		rlen = tcp_sock_read(csk, rbuf, MAX_BUF);
 		if (rlen == 0) {
 			log(DEBUG, "tcp_sock_read return 0, finish transmission.");
 			break;
 		} 
 		else if (rlen > 0) {
-			rbuf[rlen] = '\0';
-			sprintf(wbuf, "server echoes: %s", rbuf);
-			if (tcp_sock_write(csk, wbuf, strlen(wbuf)) < 0) {
-				log(DEBUG, "tcp_sock_write return negative value, something goes wrong.");
-				exit(1);
-			}
+			fprintf(f, "%s", rbuf);
+			total_recv += rlen;
+			fprintf(stdout, "[recv] %d KB\t[total] %d KB\n", rlen/1024, total_recv/1024);
 		}
 		else {
 			log(DEBUG, "tcp_sock_read return negative value, something goes wrong.");
 			exit(1);
 		}
 	}
+	fclose(f);
 
 	log(DEBUG, "close this connection.");
 
@@ -75,30 +76,13 @@ void *tcp_client(void *arg)
 		exit(1);
 	}
 
-	char *wbuf = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-	int wlen = strlen(wbuf);
-	char rbuf[1001];
-	int rlen = 0;
+	FILE *f = fopen("./client-input.dat","r");
+	char* buf = (char *)malloc(MAX_BUF);
+	int len = fread(buf, sizeof(char), MAX_BUF, f);
+	fclose(f);
 
-	int n = 10;
-	for (int i = 0; i < n; i++) {
-		if (tcp_sock_write(tsk, wbuf + i, wlen - n) < 0)
-			break;
-
-		rlen = tcp_sock_read(tsk, rbuf, 1000);
-		if (rlen == 0) {
-			log(DEBUG, "tcp_sock_read return 0, finish transmission.");
-			break;
-		}
-		else if (rlen > 0) {
-			rbuf[rlen] = '\0';
-			fprintf(stdout, "%s\n", rbuf);
-		}
-		else {
-			log(DEBUG, "tcp_sock_read return negative value, something goes wrong.");
-			exit(1);
-		}
-		sleep(1);
+	if(tcp_sock_write(tsk, buf, len) < 0){
+		fprintf(stdout,"[tcp_sock_write_error]");
 	}
 
 	tcp_sock_close(tsk);

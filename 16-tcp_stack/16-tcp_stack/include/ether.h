@@ -4,7 +4,7 @@
 #include "types.h"
 
 #define ETH_ALEN 		6				// length of mac address
-#define ETH_FRAME_LEN	1514			// maximum length of an ethernet frame (packet)
+#define ETH_FRAME_LEN	1500			// maximum length of an ethernet frame (packet)
 
 // protocol format in ethernet header
 #define ETH_P_ALL		0x0003          // every packet, only used when tending to receive all packets

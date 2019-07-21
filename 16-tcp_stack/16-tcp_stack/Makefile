@@ -4,7 +4,7 @@ all: $(TARGET)
 CC = gcc
 LD = gcc
 
-CFLAGS = -g -Wall -Iinclude
+CFLAGS = -g -Wall -Iinclude -gdwarf-2 -g3
 LDFLAGS = 
 
 LIBS = -lpthread
@@ -24,3 +24,6 @@ $(TARGET): $(OBJS)
 
 clean:
 	rm -f *.o $(TARGET)
+
+tags: $(SRCS) $(HDRS)
+	ctags $(SRCS) $(HDRS)

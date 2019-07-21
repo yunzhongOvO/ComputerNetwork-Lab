@@ -27,6 +27,6 @@ static const char *log_level_str[] = { "DEBUG", "INFO", "WARNING", "ERROR" };
 		if (level < this_log_level) \
 			break; \
 		log_it(fmt, log_level_str[level], ##__VA_ARGS__); \
-	} while (0)
-
+	} while (0);
+ 
 #endif

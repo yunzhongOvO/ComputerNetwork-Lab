@@ -6,6 +6,7 @@
 #include "ring_buffer.h"
 
 #include <stdlib.h>
+
 // update the snd_wnd of tcp_sock
 //
 // if the snd_wnd before updating is zero, notify tcp_sock_send (wait_send)
@@ -13,11 +14,11 @@ static inline void tcp_update_window(struct tcp_sock *tsk, struct tcp_cb *cb)
 {
 	u16 old_snd_wnd = tsk->snd_wnd;
 	tsk->snd_wnd = cb->rwnd;
-	if (old_snd_wnd == 0)
+	if (old_snd_wnd == 0){
 		wake_up(tsk->wait_send);
+	}
 }
 
-// update the snd_wnd safely: cb->ack should be between snd_una and snd_nxt
 static inline void tcp_update_window_safe(struct tcp_sock *tsk, struct tcp_cb *cb)
 {
 	if (less_or_equal_32b(tsk->snd_una, cb->ack) && less_or_equal_32b(cb->ack, tsk->snd_nxt))
@@ -42,138 +43,171 @@ static inline int is_tcp_seq_valid(struct tcp_sock *tsk, struct tcp_cb *cb)
 	}
 }
 
-// Process the incoming packet according to TCP state machine. 
+void tcp_state_listen(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
+{
+	if (cb->flags & TCP_SYN) {
+		struct tcp_sock *csk = alloc_tcp_sock();
+		csk->sk_sip   = cb->daddr;
+		csk->sk_sport = cb->dport;
+		csk->sk_dip   = cb->saddr;
+		csk->sk_dport = cb->sport;
+		csk->iss = tcp_new_iss();
+		csk->snd_una = csk->iss;
+		csk->snd_nxt = csk->iss;
+		csk->rcv_nxt = cb->seq_end;
+		csk->parent = tsk;
+		list_add_tail(&csk->list, &csk->listen_queue);
+		tcp_set_state(csk, TCP_SYN_RECV);
+		tcp_set_state(tsk, TCP_SYN_RECV);
+		tcp_set_retrans_timer(csk);
+		tcp_send_control_packet(csk, TCP_SYN | TCP_ACK);
+		tcp_hash(csk);
+	}
+}
+
+void tcp_state_syn_sent(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
+{
+	if( cb->flags & (TCP_SYN | TCP_ACK) ) {
+		tsk->rcv_nxt = cb->seq_end;
+		tsk->snd_una = cb->ack;
+		snd_buf_rcv_ack(tsk, cb->ack);
+		tcp_unset_retrans_timer(tsk);
+		tcp_set_state(tsk, TCP_ESTABLISHED);
+		tcp_send_control_packet(tsk, TCP_ACK);
+		wake_up(tsk->wait_connect);
+	}
+	// else
+	// 	tcp_send_reset(cb);
+}
+
+void tcp_state_syn_recv(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
+{
+	
+	if(cb->flags & TCP_ACK) {
+		struct tcp_sock *csk = tsk, *parent_tsk = csk->parent;
+		tcp_sock_accept_enqueue(csk);
+		csk->rcv_nxt = cb->seq_end;
+		tsk->snd_una = cb->ack;
+		snd_buf_rcv_ack(tsk, cb->ack);
+		tcp_unset_retrans_timer(tsk);
+		tcp_set_state(parent_tsk, TCP_ESTABLISHED);
+		tcp_set_state(csk, TCP_ESTABLISHED);
+		wake_up(parent_tsk->wait_accept);
+	}
+}
+
+void tcp_recv_data(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
+{
+	if(less_than_32b(cb->seq, tsk->rcv_nxt)){
+		return;
+	}
+	add_ofo_buf(tsk, cb, packet);
+	remove_ofo_buf(tsk); 
+	tsk->snd_una = (greater_than_32b(cb->ack, tsk->snd_una))?cb->ack :tsk->snd_una;
+	tcp_set_retrans_timer(tsk);
+	tcp_send_data(tsk, "yes",sizeof("yes"));
+}
+
 void tcp_process(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
 {
-	// fprintf(stdout, "TODO: implement %s please.\n", __FUNCTION__);
-	if (tsk->state != TCP_CLOSED && tsk->state != TCP_LISTEN) {
-		tsk->snd_una = cb->ack;
-		tsk->rcv_nxt = cb->seq_end;
-		if (!is_tcp_seq_valid(tsk, cb))
-			return;
+	if (tsk->state == TCP_CLOSED) {
+		// tcp_send_reset(cb);
+		return;
 	}
-
-	if (cb->flags & TCP_RST) {
-		tcp_set_state(tsk, TCP_CLOSED);
-        tcp_unhash(tsk);
+	if (tsk->state == TCP_LISTEN) {
+		
+		tcp_state_listen(tsk, cb, packet);
+		return;
+	}
+	if (tsk->state == TCP_SYN_SENT) {
+		tcp_state_syn_sent(tsk, cb, packet);
 		return;
 	}
 	
-	switch (tsk->state)
-	{
-		case TCP_CLOSED:
-			tcp_send_reset(cb);
-			tcp_set_state(tsk, TCP_CLOSED);
-			break;
+	if (cb->flags & TCP_RST ) {
+		tcp_sock_close(tsk);
+		free_tcp_sock(tsk);
+		return;
+	}
 
-		case TCP_LISTEN:
-			if (cb->flags & TCP_SYN) { // set up child tcp_sock
-				struct tcp_sock *csk = alloc_tcp_sock();
-				csk->parent   = tsk;
-				csk->sk_sip   = cb->daddr;
-				csk->sk_dip   = cb->saddr;
-				csk->sk_sport = cb->dport;
-				csk->sk_dport = cb->sport;
-				csk->rcv_nxt  = cb->seq_end;
-				csk->iss      = tcp_new_iss();
-				csk->snd_nxt  = csk->iss;
-
-				struct sock_addr sa = {htonl(csk->sk_sip), htons(csk->sk_sport)};
-				if (tcp_sock_bind(csk, &sa) < 0)
-					return ;
-				list_add_tail(&csk->list, &tsk->listen_queue);
-				
-				tcp_set_state(csk, TCP_SYN_RECV);
-				tcp_hash(csk);
-				tcp_send_control_packet(csk, TCP_SYN | TCP_ACK);
-			} else {
-				tcp_send_reset(cb);
-				tcp_set_state(tsk, TCP_CLOSED);
-			}
-			break;
-
-		case TCP_SYN_RECV:
-			if (cb->flags & TCP_ACK) {
-				tcp_set_state(tsk, TCP_ESTABLISHED);
-				tcp_sock_listen_dequeue(tsk);
-				tcp_sock_accept_enqueue(tsk);
+	if (cb->flags & TCP_SYN){
+		// tcp_send_reset(cb);
+		tcp_sock_close(tsk);
+		return;
+	}
+	// if (!(cb->flags & TCP_ACK)){ 
+	// 	// tcp_send_reset(cb);
+	// 	return;
+	// }
+	if (cb->flags & TCP_ACK) {
+		if (tsk->state == TCP_SYN_RECV) {
+			tcp_state_syn_recv(tsk, cb, packet); 
+			return;
+		}
+		else if (tsk->state == TCP_ESTABLISHED && !(cb->flags & TCP_FIN) ) {
+			if(!cb->pl_len || !strcmp(cb->payload,"yes")){ 
+				tsk->snd_una = cb->ack;
+				tsk->rcv_nxt = cb->seq + 1;
 				tcp_update_window_safe(tsk, cb);
-				wake_up(tsk->parent->wait_accept);
-			} else {
-				tcp_send_reset(cb);
-				tcp_set_state(tsk, TCP_CLOSED);
+				snd_buf_rcv_ack(tsk, cb->ack);
+				tcp_init_retrans_timer(tsk);
+				wake_up(tsk->wait_send);
+				return;
 			}
-			break;
-
-		case TCP_SYN_SENT:
-			if (cb->flags & (TCP_SYN | TCP_ACK)) {
-				tcp_set_state(tsk, TCP_ESTABLISHED);
-				tcp_update_window_safe(tsk, cb);
-				wake_up(tsk->wait_connect);
-				tcp_send_control_packet(tsk, TCP_ACK);
-			} else {
-				tcp_send_reset(cb);
-				tcp_set_state(tsk, TCP_CLOSED);
+			else{
+				tcp_recv_data(tsk, cb, packet);
+				return;
 			}
-			break;
-
-		case TCP_ESTABLISHED:
-			if (cb->flags & TCP_FIN) {
+		}
+		else if(!(cb->flags & TCP_FIN)){
+			switch(tsk->state){
+				case TCP_FIN_WAIT_1:
+					snd_buf_rcv_ack(tsk, cb->ack);
+					tcp_unset_retrans_timer(tsk);
+					tcp_set_state(tsk, TCP_FIN_WAIT_2);
+					return;
+				case TCP_CLOSING:
+					snd_buf_rcv_ack(tsk, cb->ack);
+					tcp_unset_retrans_timer(tsk);
+					tcp_set_state(tsk, TCP_TIME_WAIT);
+					tcp_set_timewait_timer(tsk);
+					tcp_unhash(tsk);
+					return;
+				case TCP_LAST_ACK:
+					snd_buf_rcv_ack(tsk, cb->ack);
+					tcp_unset_retrans_timer(tsk);
+					tcp_set_state(tsk, TCP_CLOSED);
+					return;
+				default:
+					break;
+			}
+		}
+	}
+	if(cb->flags & TCP_FIN){
+		switch(tsk->state){
+			case TCP_ESTABLISHED:
+				tsk->rcv_nxt = cb->seq+1;
+				wait_exit(tsk->wait_recv);
+				wait_exit(tsk->wait_send);
 				tcp_set_state(tsk, TCP_CLOSE_WAIT);
-        		tcp_send_control_packet(tsk, TCP_ACK);
-				wake_up(tsk->wait_recv);
-			} else if (cb->flags & TCP_ACK) {
-				tcp_update_window_safe(tsk, cb);
-				if (cb->pl_len > 0) {
-					pthread_mutex_lock(&tsk->rcv_buf_lock);
-					write_ring_buffer(tsk->rcv_buf, cb->payload, cb->pl_len);
-					wake_up(tsk->wait_recv);
-					pthread_mutex_unlock(&tsk->rcv_buf_lock);
-				}
-			} else {
-				tcp_send_reset(cb);
-				tcp_set_state(tsk, TCP_CLOSED);
-			}
-			break;
-
-		case TCP_CLOSE_WAIT:
-			tcp_send_reset(cb);
-			tcp_set_state(tsk, TCP_CLOSED);
-			break;
-
-		case TCP_LAST_ACK:
-			if ((cb->flags & TCP_ACK) && cb->ack == tsk->snd_nxt) {
-				tcp_unhash(tsk);
-				tcp_bind_unhash(tsk);
-			} else {
-				tcp_send_reset(cb);
-			}
-			tcp_set_state(tsk, TCP_CLOSED);
-			break;
-		
-		case TCP_FIN_WAIT_1: 
-			if ((cb->flags & TCP_ACK) && cb->ack == tsk->snd_nxt) {
-				tcp_set_state(tsk, TCP_FIN_WAIT_2);
-			} else {
-				tcp_send_reset(cb);
-				tcp_set_state(tsk, TCP_CLOSED);
-			}
-			break;
-		
-		case TCP_FIN_WAIT_2: 
-			if ((cb->flags & (TCP_ACK | TCP_FIN)) && cb->ack == tsk->snd_nxt) {
+				tcp_send_control_packet(tsk, TCP_ACK);
+				return;
+			case TCP_FIN_WAIT_1:
+				tcp_set_state(tsk, TCP_CLOSING);
+				tcp_send_control_packet(tsk, TCP_ACK);
+				return;
+			case TCP_FIN_WAIT_2:
+				tsk->rcv_nxt = cb->seq+1;
 				tcp_set_state(tsk, TCP_TIME_WAIT);
 				tcp_set_timewait_timer(tsk);
 				tcp_send_control_packet(tsk, TCP_ACK);
-			} else {
-				tcp_send_reset(cb);
-				tcp_set_state(tsk, TCP_CLOSED);
-			}
-			break;
-		
-		default:
-			tcp_send_reset(cb);
-			tcp_set_state(tsk, TCP_CLOSED);
-			break;
+				tcp_unhash(tsk);
+				return;
+			default:
+				break;
+		}
 	}
+
+	tcp_send_control_packet(tsk, TCP_ACK);
+	return;
 }

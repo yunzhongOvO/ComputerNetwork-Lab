@@ -63,11 +63,11 @@ struct tcp_sock {
 	struct list_head list;
 	// tcp timer used during TCP_TIME_WAIT state
 	struct tcp_timer timewait;
-
-	// used for timeout retransmission
+	//timer for tcp trans
 	struct tcp_timer retrans_timer;
 
-	// synch waiting structure of *connect*, *accept*, *recv*, and *send*
+
+	// async waiting structure of *connect*, *accept*, *recv*, and *send*
 	struct synch_wait *wait_connect;
 	struct synch_wait *wait_accept;
 	struct synch_wait *wait_recv;
@@ -75,13 +75,7 @@ struct tcp_sock {
 
 	// receiving buffer
 	struct ring_buffer *rcv_buf;
-	pthread_mutex_t rcv_buf_lock;
-
-	// used to pend unacked packets
-	struct list_head send_buf;
-	// used to pend out-of-order packets
-	struct list_head rcv_ofo_buf;
-
+	struct list_head rcv_ofo_list;
 	// tcp state, see enum tcp_state in tcp.h
 	int state;
 
@@ -96,29 +90,22 @@ struct tcp_sock {
 	// the highest byte ACKed by itself (i.e. the byte expected to receive next)
 	u32 rcv_nxt;
 
-	// used to indicate the end of fast recovery
-	u32 recovery_point;		
-
-	// min(adv_wnd, cwnd)
-	u32 snd_wnd;
-	// the receiving window advertised by peer
-	u16 adv_wnd;
-
+	// the size of sending window (i.e. the receiving window advertised by peer)
+	u16 snd_wnd;
 	// the size of receiving window (advertised by tcp sock itself)
 	u16 rcv_wnd;
 
-	// congestion window
-	u32 cwnd;
-
-	// slow start threshold
-	u32 ssthresh;
 };
 
 void tcp_set_state(struct tcp_sock *tsk, int state);
 
+static inline void tcp_sock_inc_ref_cnt(struct tcp_sock *tsk)
+{
+	tsk->ref_cnt += 1;
+}
+
 int tcp_sock_accept_queue_full(struct tcp_sock *tsk);
 void tcp_sock_accept_enqueue(struct tcp_sock *tsk);
-void tcp_sock_listen_dequeue(struct tcp_sock *tsk);
 struct tcp_sock *tcp_sock_accept_dequeue(struct tcp_sock *tsk);
 
 int tcp_hash(struct tcp_sock *tsk);
@@ -134,7 +121,7 @@ void tcp_send_reset(struct tcp_cb *cb);
 
 void tcp_send_control_packet(struct tcp_sock *tsk, u8 flags);
 void tcp_send_packet(struct tcp_sock *tsk, char *packet, int len);
-int tcp_send_data(struct tcp_sock *tsk, char *buf, int len);
+void tcp_send_data(struct tcp_sock *tsk, char *buf, int tcp_data_len);
 
 void tcp_process(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet);
 
@@ -149,4 +136,62 @@ void tcp_sock_close(struct tcp_sock *tsk);
 int tcp_sock_read(struct tcp_sock *tsk, char *buf, int len);
 int tcp_sock_write(struct tcp_sock *tsk, char *buf, int len);
 
+
+// ---------------send buffer-------------------
+
+struct tcp_snd_buf{
+	int size;
+	pthread_mutex_t lock;
+	pthread_t thread_retrans_timer;
+	struct list_head list;
+} snd_buf;
+
+struct tcp_buf_copy{
+	int len;
+	char* packet;
+	struct list_head list;
+};
+
+// ? initialize send buffer
+void init_snd_buf();
+
+// ? add a new tcp packet to the end of list
+void add_pkt_to_snd_buf(char *packet, int len);
+
+// ? when receive ACK, remove packets whose seq_end < ACK, update timer
+void snd_buf_rcv_ack(struct tcp_sock *tsk, u32 ack);
+
+// ? retransfer the first packet
+void retrans_snd_buf(struct tcp_sock *tsk);
+
+// close link if cannot receive ACK after retransfering 3 times
+void free_snd_buf();
+
+struct tcp_buf_copy* new_tcp_buf_block();
+
+// ------------------- rcv buffer --------------------
+
+struct tcp_ofo_copy {
+	struct list_head list;
+	u32 seq;
+	u32 len; 
+	char* data;
+};
+
+// ? add received packet to ofo buffer
+void add_ofo_buf(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet);
+
+// ? remove ordered packet from ofo buffer
+int remove_ofo_buf(struct tcp_sock *tsk);
 #endif
+
+
+
+
+
+
+
+
+
+
+

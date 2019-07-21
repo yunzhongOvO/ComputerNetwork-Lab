@@ -54,7 +54,9 @@ void tcp_send_packet(struct tcp_sock *tsk, char *packet, int len)
 	ip->checksum = ip_checksum(ip);
 
 	tsk->snd_nxt += tcp_data_len;
-	tsk->snd_wnd -= tcp_data_len;
+
+	add_pkt_to_snd_buf(packet, len); 
+	tcp_init_retrans_timer(tsk);
 
 	ip_send_packet(packet, len);
 }
@@ -84,9 +86,13 @@ void tcp_send_control_packet(struct tcp_sock *tsk, u8 flags)
 
 	tcp->checksum = tcp_checksum(ip, tcp);
 
-	if (flags & (TCP_SYN|TCP_FIN))
+	if (flags & (TCP_SYN | TCP_FIN))
 		tsk->snd_nxt += 1;
 
+	if((flags != TCP_ACK) && !(flags & TCP_RST) ){ 
+		add_pkt_to_snd_buf(packet, pkt_size);
+		tcp_init_retrans_timer(tsk);
+	}
 	ip_send_packet(packet, pkt_size);
 }
 
@@ -112,4 +118,14 @@ void tcp_send_reset(struct tcp_cb *cb)
 	tcp->checksum = tcp_checksum(ip, tcp);
 
 	ip_send_packet(packet, pkt_size);
+}
+
+void tcp_send_data(struct tcp_sock *tsk, char *buf, int tcp_data_len){
+	int pkt_len = ETHER_HDR_SIZE + IP_BASE_HDR_SIZE + TCP_BASE_HDR_SIZE + tcp_data_len;
+	char *packet=(char*)malloc(pkt_len);
+	if(packet==NULL)
+		return ;
+	char* tcp_data = packet +ETHER_HDR_SIZE + IP_BASE_HDR_SIZE +TCP_BASE_HDR_SIZE;
+	memcpy(tcp_data, buf, tcp_data_len);
+	tcp_send_packet(tsk, packet, pkt_len);
 }
